@@ -332,7 +332,8 @@ query GetDevice($name: String!) {
           'history': Map<String, dynamic>? history,
         }) {
           return DeviceInfo(
-            Device(name: name, node: _node),
+            _node,
+            Device(name: name),
             settable,
             units,
             _toDevHistory(history),

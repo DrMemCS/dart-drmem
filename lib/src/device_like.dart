@@ -3,16 +3,13 @@ library;
 /// Base class for Device-like types. All device-like types have a "name" field.
 sealed class DeviceLike {
   final String name;
-  final String node;
 
-  const DeviceLike({required this.name, required this.node});
+  const DeviceLike({required this.name});
 }
 
-/// Identifies a DrMem device. Since devices are available across multiple
-/// instances of DrMem, a device has a node component. If the node field is
-/// `null`, the application has several ways to handle it: it can display an
-/// error, it can choose a default node, or it can prompt the user.
-
+/// Identifies a DrMem device by its name. The name must follow the DrMem
+/// device name syntax (e.g., `motor:X:pos`). This class validates the name
+/// format upon construction.
 class Device extends DeviceLike {
   static String _validateName(String name) {
     final regexp = RegExp(r'^\w([-\w]*\w)?(:\w([-\w]*\w)?)*$', unicode: true);
@@ -24,25 +21,20 @@ class Device extends DeviceLike {
     }
   }
 
-  Device({required super.node, required String name})
-      : super(name: _validateName(name));
+  Device({required String name}) : super(name: _validateName(name));
 
-  /// Define a comparison method. First the names are compared. If they're the
-  /// same, then the nodes are compared.
+  /// Define a comparison method.
 
   int compareTo(Device o) {
-    final result = name.compareTo(o.name);
-
-    return result != 0 ? result : node.compareTo(o.node);
+    return name.compareTo(o.name);
   }
 
-  DevicePattern toPattern() => DevicePattern(node: node, name: name);
+  DevicePattern toPattern() => DevicePattern(name: name);
 }
 
 /// Defines a device "pattern" device. In this type, the name field can be
-/// a unique device name or can be a name pattern (using "glob" patterns). In
-/// this type, the node field cannot be `null`.
-
+/// a unique device name or can be a name pattern using "glob" syntax (e.g.,
+/// `motor:X:*`).
 class DevicePattern extends DeviceLike {
-  const DevicePattern({required super.node, required super.name});
+  const DevicePattern({required super.name});
 }

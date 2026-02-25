@@ -1,13 +1,15 @@
 library;
 
-import "device_like.dart";
-import "device_history.dart";
+import 'device_like.dart';
+import 'device_history.dart';
 
 /// The result type for the [DrMem.getDeviceInfo] query. Provides
 /// meta-information about a DrMem device.
-
 class DeviceInfo {
-  /// Full name and location of device.
+  /// The name of the node on which the device exists.
+  final String node;
+
+  /// The device identifier.
   final Device device;
 
   /// Indicates whether the device is settable.
@@ -22,5 +24,11 @@ class DeviceInfo {
   /// contain information related to it.
   final DeviceHistory? history;
 
-  const DeviceInfo(this.device, this.settable, this.units, this.history);
+  const DeviceInfo(
+    this.node,
+    this.device,
+    this.settable,
+    this.units,
+    this.history,
+  );
 }
