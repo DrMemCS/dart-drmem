@@ -232,7 +232,7 @@ query AllDrivers {
     _ => null,
   };
 
-  Future<List<DriverInfo>> getDriverInfo(String node) async {
+  Future<List<DriverInfo>> getDriverInfo() async {
     final QueryOptions options = QueryOptions(document: gql(_queryAllDrivers));
     final QueryResult result = await q.query(options);
 
