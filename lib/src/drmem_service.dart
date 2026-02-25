@@ -241,8 +241,9 @@ query AllDrivers {
     }
 
     final List<DriverInfo>? drivers =
-        (result.data?['driverInfo'] as List<Map<String, dynamic>>?)
-            ?.map(_toDriverInfo)
+        (result.data?['driverInfo'] as List?)
+            ?.cast<Map<String, dynamic>>()
+            .map(_toDriverInfo)
             .nonNulls
             .toList()
           ?..sort((DriverInfo a, DriverInfo b) => a.name.compareTo(b.name));
@@ -357,8 +358,9 @@ query GetDevice($name: String!) {
     }
 
     final List<DeviceInfo>? devices =
-        (result.data?['deviceInfo'] as List<Map<String, dynamic>>?)
-            ?.map(_toDevInfo())
+        (result.data?['deviceInfo'] as List?)
+            ?.cast<Map<String, dynamic>>()
+            .map(_toDevInfo())
             .nonNulls
             .toList()
           ?..sort((DeviceInfo a, DeviceInfo b) => a.device.compareTo(b.device));
