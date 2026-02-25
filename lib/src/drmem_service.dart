@@ -72,6 +72,52 @@ class DrMemService {
     ),
   );
 
+  // Validates certificates that aren't recognized by Root Authorities.
+  // Early DrMem instances only announced the SHA-1 fingerprint, so if the
+  // MD5 signature is empty, we simply accept that portion. Later versions
+  // use both digests and we will compare both.
+
+  static bool _validateCert(
+    X509Certificate cert,
+    String host,
+    int port,
+    NodeInfo info,
+  ) {
+    dev.log(
+      "badCertificateCallback invoked for host: $host, port: $port",
+      name: "DrMem.ConnectCert",
+    );
+
+    final expectedPort = info.addr.port;
+
+    if (info.signatures case (String md5Expected, String sha256Expected)) {
+      final actualMd5 = md5.convert(cert.der).toString();
+      final actualSha256 = sha256.convert(cert.der).toString();
+      final portMatch = port == expectedPort;
+
+      // Legacy support: if MD5 in NodeInfo is empty, we don't check it.
+
+      final md5Match = (md5Expected.isEmpty || md5Expected == actualMd5);
+      final sha256Match = actualSha256 == sha256Expected;
+      final decision = portMatch && md5Match && sha256Match;
+
+      dev.log(r'''
+badCertificateCallback:
+    Host: $host:$port (Expected Port: $expectedPort -> Match: $portMatch)
+    MD5: Expected='$md5Expected', Actual='$actualMd5' -> Match: $md5Match
+    SHA256: Expected='$sha256Expected', Actual='$actualSha256' -> Match: $sha256Match
+    Overall Decision: $decision
+''', name: "DrMem.ConnectCert");
+      return decision;
+    } else {
+      dev.log(
+        "badCertificateCallback: Signatures not available in NodeInfo. Forcing rejection for safety.",
+        name: "DrMem.ConnectCert",
+      );
+      return false;
+    }
+  }
+
   // Creates two `Client` connections that will connect to the specified node.
   // If an encrypted channel is requested, the client's ID is passed along.
 
@@ -80,56 +126,8 @@ class DrMemService {
     ClientID? id,
   ) {
     final httpClient = HttpClient()
-      ..badCertificateCallback =
-          // This validates certificates that aren't recognized by Root
-          // Authorities. Early DrMem instances only announced the SHA-1
-          // fingerprint, so if the MD5 signature is empty, we simply
-          // accept that portion. Later versions use both digests and we
-          // will compare both.
-          (X509Certificate cert, String host, int port) {
-            dev.log(
-              "badCertificateCallback invoked for host: $host, port: $port",
-              name: "DrMem.ConnectCert",
-            );
-
-            final expectedPort = info.addr.port;
-
-            if (info.signatures case (
-              String md5Expected,
-              String sha256Expected,
-            )) {
-              final actualMd5 = md5.convert(cert.der).toString();
-              final actualSha256 = sha256.convert(cert.der).toString();
-              final portMatch = port == expectedPort;
-
-              // Legacy support: if MD5 in NodeInfo is empty, we don't check it.
-
-              final md5Match =
-                  (md5Expected.isEmpty || md5Expected == actualMd5);
-              final sha256Match = actualSha256 == sha256Expected;
-              final decision = portMatch && md5Match && sha256Match;
-
-              dev.log(r'''
-badCertificateCallback:
-    Host: $host:$port (Expected Port: $expectedPort -> Match: $portMatch)
-    MD5: Expected='$md5Expected', Actual='$actualMd5' -> Match: $md5Match
-    SHA256: Expected='$sha256Expected', Actual='$actualSha256' -> Match: $sha256Match
-    Overall Decision: $decision
-''', name: "DrMem.ConnectCert");
-              return decision;
-            } else {
-              // This implies an unencrypted connection was expected (http/ws),
-              // but we're in a callback for an https/wss attempt. Or, it's an
-              // encrypted connection (https/wss) but NodeInfo is missing
-              // signatures.
-
-              dev.log(
-                "badCertificateCallback: Signatures not available in NodeInfo. Forcing rejection for safety.",
-                name: "DrMem.ConnectCert",
-              );
-              return false;
-            }
-          };
+      ..badCertificateCallback = (cert, host, port) =>
+          _validateCert(cert, host, port, info);
 
     final encrypted = info.signatures != null;
     final (qUri, sUri) = _buildUris(
