@@ -210,7 +210,7 @@ mutation SetDevice($device: String!, $value: SettingData!) {
       result.data!['intValue'],
       result.data!['floatValue'],
       result.data!['stringValue'],
-      result.data!['colorValue'],
+      (result.data!['colorValue'] as List?)?.cast<int>().toList(),
     );
   }
 
@@ -289,7 +289,7 @@ query GetDevice($name: String!) {
         'intValue': int? fInt,
         'floatValue': double? fFlt,
         'stringValue': String? fStr,
-        'colorValue': List<int>? fColor,
+        'colorValue': List? fColor,
       },
       'lastPoint': {
         'stamp': DateTime lStamp,
@@ -297,14 +297,28 @@ query GetDevice($name: String!) {
         'intValue': int? lInt,
         'floatValue': double? lFlt,
         'stringValue': String? lStr,
-        'colorValue': List<int>? lColor,
+        'colorValue': List? lColor,
       },
     } =>
       DeviceHistory(
         totalPoints: totalPoints,
         summary: (
-          Reading.fromParams(fStamp, fBool, fInt, fFlt, fStr, fColor),
-          Reading.fromParams(lStamp, lBool, lInt, lFlt, lStr, lColor),
+          Reading.fromParams(
+            fStamp,
+            fBool,
+            fInt,
+            fFlt,
+            fStr,
+            fColor?.cast<int>().toList(),
+          ),
+          Reading.fromParams(
+            lStamp,
+            lBool,
+            lInt,
+            lFlt,
+            lStr,
+            lColor?.cast<int>().toList(),
+          ),
         ),
       ),
     _ => DeviceHistory(totalPoints: 0),
@@ -406,7 +420,7 @@ subscription MonitorDevice($device: String!, $range: DateRange) {
           'intValue': int? intValue,
           'floatValue': double? floatValue,
           'stringValue': String? stringValue,
-          'colorValue': List<int>? colorValue,
+          'colorValue': List? colorValue,
         }:
           yield Reading.fromParams(
             stamp,
@@ -414,7 +428,7 @@ subscription MonitorDevice($device: String!, $range: DateRange) {
             intValue,
             floatValue,
             stringValue,
-            colorValue?.toList(),
+            colorValue?.cast<int>().toList(),
           );
 
         case _:
