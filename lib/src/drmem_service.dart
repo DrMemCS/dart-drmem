@@ -141,7 +141,7 @@ badCertificateCallback:
     dev.log("Connecting to Subscription URI: $sUri", name: "DrMem.Connect");
 
     final Map<String, String> headers = encrypted && id != null
-        ? {'X-DrMem-Client-Id': id.fingerprint}
+        ? {'Authorization': 'Bearer ${id.fingerprint}'}
         : {};
     final qClient = GraphQLClient(
       link: HttpLink(
