@@ -32,6 +32,9 @@ extension type HostInfo._((String, int) v) {
   }
 }
 
+const String _queryPath = "/drmem/q";
+const String _subscriptionPath = "/drmem/s";
+
 /// Information associated with DrMem nodes.
 ///
 /// This information is obtained via the mDNS announcements and by querying the
@@ -84,9 +87,9 @@ class NodeInfo {
     required this.addr,
     this.signatures,
     this.bootTime,
-    this.queries = "/drmem/q",
-    this.mutations = "/drmem/q",
-    this.subscriptions = "/drmem/s",
+    this.queries = _queryPath,
+    this.mutations = _queryPath,
+    this.subscriptions = _subscriptionPath,
   });
 
   /// Indicates whether the node is currently announcing itself on the local
