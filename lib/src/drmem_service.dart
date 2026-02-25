@@ -5,6 +5,7 @@ import 'package:dart_drmem/src/device_history.dart';
 import 'package:http/io_client.dart';
 import 'package:graphql/client.dart';
 import 'package:crypto/crypto.dart';
+import 'package:web_socket_channel/io.dart';
 
 import 'client_id.dart';
 import 'node_info.dart';
@@ -42,16 +43,12 @@ class DrMemService {
   GraphQLClient get s => _handles.$2;
 
   /// Clean up resources.
-  ///
   /// This method should be called by the owner when the service is no longer
   /// needed.
 
-  void dispose() => Future.microtask(() async {
-    Future.wait([
-      _handles.$1.queryManager.link.dispose(),
-      _handles.$2.queryManager.link.dispose(),
-    ]);
-  });
+  Future<void> dispose() async {
+    await Future.wait([_handles.$1.link.dispose(), _handles.$2.link.dispose()]);
+  }
 
   // Helper function to create the GraphQL query URIs.
 
@@ -164,6 +161,15 @@ badCertificateCallback:
           autoReconnect: true,
           headers: headers,
           queryAndMutationTimeout: Duration(seconds: 2),
+          connectFn: (url, protocols) async {
+            final socket = await WebSocket.connect(
+              url.toString(),
+              protocols: protocols,
+              headers: headers,
+              customClient: httpClient,
+            );
+            return IOWebSocketChannel(socket);
+          },
         ),
       ),
       cache: GraphQLCache(),
