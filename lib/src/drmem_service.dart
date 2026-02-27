@@ -213,13 +213,15 @@ mutation SetDevice($name: String!, $value: SettingData!) {
         );
       }
 
+      final data = result.data!;
+
       return Reading.fromParams(
-        result.data!['stamp'],
-        result.data!['boolValue'],
-        result.data!['intValue'],
-        result.data!['floatValue'],
-        result.data!['stringValue'],
-        (result.data!['colorValue'] as List?)?.cast<int>().toList(),
+        DateTime.parse(data['stamp']),
+        data['boolValue'],
+        data['intValue'],
+        data['floatValue'],
+        data['stringValue'],
+        (data['colorValue'] as List?)?.cast<int>().toList(),
       );
     } on OperationException catch (e) {
       // GraphQL-specific error thrown by the client
