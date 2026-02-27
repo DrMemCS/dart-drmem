@@ -51,11 +51,6 @@ void main() async {
         break;
       }
     }
-
-    if (readingCount == 0) {
-      print('No readings received. The subscription may have connected but');
-      print('the server is not sending data in the expected format.');
-    }
   } on DrMemNetworkException catch (e) {
     // Network-level errors: socket, HTTP connection, etc.
     print('Network Error: ${e.desc}');
