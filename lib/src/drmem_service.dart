@@ -19,13 +19,18 @@ import 'drmem_exception.dart';
 import "dart:developer" as dev;
 
 extension on DevValue {
+  /// Convert to a Map suitable for passing as the `$value` variable in
+  /// the `setDevice` mutation.  The exact field names must match the
+  /// current server schema.  The service schema currently defines
+  /// [SettingData] with these five possible fields; only one may be
+  /// non-null at a time.
   Map<String, dynamic> toGqlInput() => switch (this) {
-    DevBool(value: bool v) => {'boolValue': v},
-    DevInt(value: int v) => {'intValue': v},
-    DevFlt(value: double v) => {'floatValue': v},
-    DevStr(value: String v) => {'stringValue': v},
+    DevBool(value: bool v) => {'bool': v},
+    DevInt(value: int v) => {'int': v},
+    DevFlt(value: double v) => {'flt': v},
+    DevStr(value: String v) => {'str': v},
     DevColor(red: int r, green: int g, blue: int b, alpha: int a) => {
-      'colorValue': [r, g, b, a],
+      'color': [r, g, b, a],
     },
   };
 }
@@ -178,8 +183,8 @@ badCertificateCallback:
   }
 
   static const String _mutateSetDevice = r'''
-mutation SetDevice($device: String!, $value: SettingData!) {
-  setDevice(device: $device, value: $value) {
+mutation SetDevice($name: String!, $value: SettingData!) {
+  setDevice(name: $name, value: $value) {
     __typename
     stamp
     boolValue
@@ -195,7 +200,7 @@ mutation SetDevice($device: String!, $value: SettingData!) {
   Future<Reading> setDevice(Device device, DevValue value) async {
     final MutationOptions options = MutationOptions(
       document: gql(_mutateSetDevice),
-      variables: {'device': device.name, 'value': value.toGqlInput()},
+      variables: {'name': device.name, 'value': value.toGqlInput()},
     );
 
     try {
@@ -216,6 +221,9 @@ mutation SetDevice($device: String!, $value: SettingData!) {
         result.data!['stringValue'],
         (result.data!['colorValue'] as List?)?.cast<int>().toList(),
       );
+    } on OperationException catch (e) {
+      // GraphQL-specific error thrown by the client
+      throw DrMemServerException('Failed to set device: $e', originalError: e);
     } catch (e, stackTrace) {
       throw DrMemNetworkException(
         'Failed to set device: $e',
@@ -267,6 +275,11 @@ query AllDrivers {
             ?..sort((DriverInfo a, DriverInfo b) => a.name.compareTo(b.name));
 
       return drivers ?? [];
+    } on OperationException catch (e) {
+      throw DrMemServerException(
+        'Failed to get driver info: $e',
+        originalError: e,
+      );
     } catch (e, stackTrace) {
       throw DrMemNetworkException(
         'Failed to get driver info: $e',
@@ -399,6 +412,11 @@ query GetDevice($name: String!) {
             );
 
       return devices ?? [];
+    } on OperationException catch (e) {
+      throw DrMemServerException(
+        'Failed to get device info: $e',
+        originalError: e,
+      );
     } catch (e, stackTrace) {
       throw DrMemNetworkException(
         'Failed to get device info: $e',
