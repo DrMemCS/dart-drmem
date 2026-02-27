@@ -317,7 +317,7 @@ query GetDevice($name: String!) {
   }
 }''';
 
-  DeviceHistory _toDevHistory(Map<String, dynamic>? json) => switch (json) {
+  DeviceHistory? _toDevHistory(Map<String, dynamic>? json) => switch (json) {
     {
       'totalPoints': int totalPoints,
       'firstPoint': {
@@ -336,7 +336,8 @@ query GetDevice($name: String!) {
         'stringValue': String? lStr,
         'colorValue': List? lColor,
       },
-    } =>
+    }
+        when totalPoints > 0 =>
       DeviceHistory(
         totalPoints: totalPoints,
         summary: (
@@ -358,7 +359,7 @@ query GetDevice($name: String!) {
           ),
         ),
       ),
-    _ => DeviceHistory(totalPoints: 0),
+    _ => null,
   };
 
   DeviceInfo? Function(Map<String, dynamic>) _toDevInfo() =>

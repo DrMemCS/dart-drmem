@@ -16,7 +16,7 @@ class DeviceHistory {
   /// respectively, at the time of the query. It is possible that, after
   /// this query returns, the oldest point is dropped due to new points being
   /// added.
-  final (Reading, Reading)? summary;
+  final (Reading, Reading) summary;
 
-  const DeviceHistory({required this.totalPoints, this.summary});
+  const DeviceHistory({required this.totalPoints, required this.summary});
 }
