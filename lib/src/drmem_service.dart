@@ -14,6 +14,7 @@ import 'device_info.dart';
 import 'driver_info.dart';
 import 'device_value.dart';
 import 'reading.dart';
+import 'drmem_exception.dart';
 
 import "dart:developer" as dev;
 
@@ -196,20 +197,32 @@ mutation SetDevice($device: String!, $value: SettingData!) {
       document: gql(_mutateSetDevice),
       variables: {'device': device.name, 'value': value.toGqlInput()},
     );
-    final QueryResult result = await q.mutate(options);
 
-    if (result.hasException) {
-      throw (result.exception!);
+    try {
+      final QueryResult result = await q.mutate(options);
+
+      if (result.hasException) {
+        throw DrMemServerException(
+          'Failed to set device: ${result.exception}',
+          originalError: result.exception,
+        );
+      }
+
+      return Reading.fromParams(
+        result.data!['stamp'],
+        result.data!['boolValue'],
+        result.data!['intValue'],
+        result.data!['floatValue'],
+        result.data!['stringValue'],
+        (result.data!['colorValue'] as List?)?.cast<int>().toList(),
+      );
+    } catch (e, stackTrace) {
+      throw DrMemNetworkException(
+        'Failed to set device: $e',
+        originalError: e,
+        stackTrace: stackTrace,
+      );
     }
-
-    return Reading.fromParams(
-      result.data!['stamp'],
-      result.data!['boolValue'],
-      result.data!['intValue'],
-      result.data!['floatValue'],
-      result.data!['stringValue'],
-      (result.data!['colorValue'] as List?)?.cast<int>().toList(),
-    );
   }
 
   static const String _queryAllDrivers = r'''
@@ -234,21 +247,33 @@ query AllDrivers {
 
   Future<List<DriverInfo>> getDriverInfo() async {
     final QueryOptions options = QueryOptions(document: gql(_queryAllDrivers));
-    final QueryResult result = await q.query(options);
 
-    if (result.hasException) {
-      throw (result.exception!);
+    try {
+      final QueryResult result = await q.query(options);
+
+      if (result.hasException) {
+        throw DrMemServerException(
+          'Failed to get driver info: ${result.exception}',
+          originalError: result.exception,
+        );
+      }
+
+      final List<DriverInfo>? drivers =
+          (result.data?['driverInfo'] as List?)
+              ?.cast<Map<String, dynamic>>()
+              .map(_toDriverInfo)
+              .nonNulls
+              .toList()
+            ?..sort((DriverInfo a, DriverInfo b) => a.name.compareTo(b.name));
+
+      return drivers ?? [];
+    } catch (e, stackTrace) {
+      throw DrMemNetworkException(
+        'Failed to get driver info: $e',
+        originalError: e,
+        stackTrace: stackTrace,
+      );
     }
-
-    final List<DriverInfo>? drivers =
-        (result.data?['driverInfo'] as List?)
-            ?.cast<Map<String, dynamic>>()
-            .map(_toDriverInfo)
-            .nonNulls
-            .toList()
-          ?..sort((DriverInfo a, DriverInfo b) => a.name.compareTo(b.name));
-
-    return drivers ?? [];
   }
 
   static const String _queryGetDeviceInfo = r'''
@@ -352,21 +377,35 @@ query GetDevice($name: String!) {
       document: gql(_queryGetDeviceInfo),
       variables: {'name': device.name},
     );
-    final QueryResult result = await q.query(options);
 
-    if (result.hasException) {
-      throw (result.exception!);
+    try {
+      final QueryResult result = await q.query(options);
+
+      if (result.hasException) {
+        throw DrMemServerException(
+          'Failed to get device info: ${result.exception}',
+          originalError: result.exception,
+        );
+      }
+
+      final List<DeviceInfo>? devices =
+          (result.data?['deviceInfo'] as List?)
+              ?.cast<Map<String, dynamic>>()
+              .map(_toDevInfo())
+              .nonNulls
+              .toList()
+            ?..sort(
+              (DeviceInfo a, DeviceInfo b) => a.device.compareTo(b.device),
+            );
+
+      return devices ?? [];
+    } catch (e, stackTrace) {
+      throw DrMemNetworkException(
+        'Failed to get device info: $e',
+        originalError: e,
+        stackTrace: stackTrace,
+      );
     }
-
-    final List<DeviceInfo>? devices =
-        (result.data?['deviceInfo'] as List?)
-            ?.cast<Map<String, dynamic>>()
-            .map(_toDevInfo())
-            .nonNulls
-            .toList()
-          ?..sort((DeviceInfo a, DeviceInfo b) => a.device.compareTo(b.device));
-
-    return devices ?? [];
   }
 
   static const String _subscriptionMonitorDevice = r'''
@@ -389,6 +428,39 @@ subscription MonitorDevice($device: String!, $range: DateRange) {
   Map<String, dynamic>? _buildDateRange(DateTime? a, DateTime? b) =>
       (a != null || b != null) ? {'start': a, 'end': b} : null;
 
+  // Helper function to convert GraphQL exceptions to DrMemException
+
+  static DrMemException _normalizeGraphQLError(dynamic error) {
+    if (error is DrMemException) {
+      return error;
+    }
+
+    // Check for common GraphQL error types
+
+    final errorString = error.toString();
+
+    if (errorString.contains('SocketException') ||
+        errorString.contains('socket error') ||
+        errorString.contains('Connection refused')) {
+      return DrMemNetworkException(
+        'Socket error: $errorString',
+        originalError: error,
+      );
+    } else if (errorString.contains('HttpException') ||
+        errorString.contains('connection failed') ||
+        errorString.contains('timed out')) {
+      return DrMemNetworkException(
+        'HTTP connection error: $errorString',
+        originalError: error,
+      );
+    } else {
+      return DrMemServerException(
+        'GraphQL error: $errorString',
+        originalError: error,
+      );
+    }
+  }
+
   // The implementation of [DrMem.monitorDevice].
 
   Stream<Reading> monitorDevice(
@@ -396,45 +468,62 @@ subscription MonitorDevice($device: String!, $range: DateRange) {
     DateTime? startTime,
     DateTime? endTime,
   }) async* {
-    final options = SubscriptionOptions(
-      document: gql(_subscriptionMonitorDevice),
-      variables: {
-        'device': device.name,
-        'range': _buildDateRange(startTime, endTime),
-      },
-    );
+    try {
+      final options = SubscriptionOptions(
+        document: gql(_subscriptionMonitorDevice),
+        variables: {
+          'device': device.name,
+          'range': _buildDateRange(startTime, endTime),
+        },
+      );
+      final Stream<QueryResult> strm = _handles.$2.subscribe(options);
 
-    final strm = _handles.$2.subscribe(options);
+      // Handle stream-level errors and GraphQL subscription errors
 
-    await for (final event in strm) {
-      if (event.hasException) {
-        throw (event.exception!);
+      await for (final event in strm.handleError((error, stackTrace) {
+        throw DrMemStreamException(
+          'Stream error occurred: $error',
+          originalError: error,
+          stackTrace: stackTrace,
+        );
+      })) {
+        // Handle GraphQL errors in subscription events
+
+        if (event.hasException) {
+          throw DrMemService._normalizeGraphQLError(event.exception);
+        }
+
+        switch (event.data) {
+          case null:
+            {}
+
+          case {
+            'stamp': DateTime stamp,
+            'boolValue': bool? boolValue,
+            'intValue': int? intValue,
+            'floatValue': double? floatValue,
+            'stringValue': String? stringValue,
+            'colorValue': List? colorValue,
+          }:
+            yield Reading.fromParams(
+              stamp,
+              boolValue,
+              intValue,
+              floatValue,
+              stringValue,
+              colorValue?.cast<int>().toList(),
+            );
+
+          case _:
+            dev.log("data doesn't follow form.");
+        }
       }
-
-      switch (event.data) {
-        case null:
-          {}
-
-        case {
-          'stamp': DateTime stamp,
-          'boolValue': bool? boolValue,
-          'intValue': int? intValue,
-          'floatValue': double? floatValue,
-          'stringValue': String? stringValue,
-          'colorValue': List? colorValue,
-        }:
-          yield Reading.fromParams(
-            stamp,
-            boolValue,
-            intValue,
-            floatValue,
-            stringValue,
-            colorValue?.cast<int>().toList(),
-          );
-
-        case _:
-          dev.log("data doesn't follow form.");
-      }
+    } catch (e, stackTrace) {
+      throw DrMemNetworkException(
+        'Failed to establish subscription: $e',
+        originalError: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 }
