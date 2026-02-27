@@ -317,51 +317,6 @@ query GetDevice($name: String!) {
   }
 }''';
 
-  DeviceHistory? _toDevHistory(Map<String, dynamic>? json) => switch (json) {
-    {
-      'totalPoints': int totalPoints,
-      'firstPoint': {
-        'stamp': DateTime fStamp,
-        'boolValue': bool? fBool,
-        'intValue': int? fInt,
-        'floatValue': double? fFlt,
-        'stringValue': String? fStr,
-        'colorValue': List? fColor,
-      },
-      'lastPoint': {
-        'stamp': DateTime lStamp,
-        'boolValue': bool? lBool,
-        'intValue': int? lInt,
-        'floatValue': double? lFlt,
-        'stringValue': String? lStr,
-        'colorValue': List? lColor,
-      },
-    }
-        when totalPoints > 0 =>
-      DeviceHistory(
-        totalPoints: totalPoints,
-        summary: (
-          Reading.fromParams(
-            fStamp,
-            fBool,
-            fInt,
-            fFlt,
-            fStr,
-            fColor?.cast<int>().toList(),
-          ),
-          Reading.fromParams(
-            lStamp,
-            lBool,
-            lInt,
-            lFlt,
-            lStr,
-            lColor?.cast<int>().toList(),
-          ),
-        ),
-      ),
-    _ => null,
-  };
-
   DeviceInfo? Function(Map<String, dynamic>) _toDevInfo() =>
       (Map<String, dynamic> json) {
         if (json case {
@@ -375,7 +330,7 @@ query GetDevice($name: String!) {
             Device(name: name),
             settable,
             units,
-            _toDevHistory(history),
+            DeviceHistory.fromJson(history),
           );
         } else {
           return null;
