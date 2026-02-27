@@ -498,15 +498,17 @@ subscription MonitorDevice($device: String!, $range: DateRange) {
             {}
 
           case {
-            'stamp': DateTime stamp,
-            'boolValue': bool? boolValue,
-            'intValue': int? intValue,
-            'floatValue': double? floatValue,
-            'stringValue': String? stringValue,
-            'colorValue': List? colorValue,
+            'monitorDevice': {
+              'stamp': String stampStr,
+              'boolValue': bool? boolValue,
+              'intValue': int? intValue,
+              'floatValue': double? floatValue,
+              'stringValue': String? stringValue,
+              'colorValue': List? colorValue,
+            },
           }:
             yield Reading.fromParams(
-              stamp,
+              DateTime.parse(stampStr),
               boolValue,
               intValue,
               floatValue,
@@ -515,7 +517,10 @@ subscription MonitorDevice($device: String!, $range: DateRange) {
             );
 
           case _:
-            dev.log("data doesn't follow form.");
+            dev.log(
+              "data doesn't follow form. Received: ${event.data}",
+              name: "DrMem.monitorDevice",
+            );
         }
       }
     } catch (e, stackTrace) {
