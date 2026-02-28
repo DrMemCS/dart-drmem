@@ -213,15 +213,26 @@ mutation SetDevice($name: String!, $value: SettingData!) {
         );
       }
 
-      final data = result.data!;
+      // The server nests the mutation result under the `setDevice` field.
+      final Map<String, dynamic>? payload = (result.data?['setDevice'] as Map<String, dynamic>?);
+
+      if (payload == null) {
+        throw DrMemServerException(
+          'Failed to set device: missing setDevice payload',
+          originalError: result.data,
+        );
+      }
+
+      final rawStamp = payload['stamp'];
+      final DateTime stamp = rawStamp is String ? DateTime.parse(rawStamp) : rawStamp as DateTime;
 
       return Reading.fromParams(
-        DateTime.parse(data['stamp']),
-        data['boolValue'],
-        data['intValue'],
-        data['floatValue'],
-        data['stringValue'],
-        (data['colorValue'] as List?)?.cast<int>().toList(),
+        stamp,
+        payload['boolValue'],
+        payload['intValue'],
+        payload['floatValue'],
+        payload['stringValue'],
+        (payload['colorValue'] as List?)?.cast<int>().toList(),
       );
     } on OperationException catch (e) {
       // GraphQL-specific error thrown by the client
