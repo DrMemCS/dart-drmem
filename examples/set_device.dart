@@ -4,8 +4,8 @@ void main() async {
   // Connection parameters - adjust for your environment.
   const host = '127.0.0.1';
   const port = 3000;
-  const nodeName = 'demo';
-  const deviceName = 'device:value';
+  const nodeName = 'drmem-testing';
+  const deviceName = 'hc:living-room:window:brightness';
 
   final nodeInfo = NodeInfo(
     name: nodeName,

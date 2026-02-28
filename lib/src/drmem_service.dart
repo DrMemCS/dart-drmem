@@ -35,25 +35,67 @@ extension on DevValue {
   };
 }
 
+abstract class DrMemServiceAPI {
+  Future<List<DeviceInfo>> getDeviceInfo({required DevicePattern device});
+  Future<List<DriverInfo>> getDriverInfo();
+  Stream<Reading> monitorDevice(
+    Device device, {
+    DateTime? startTime,
+    DateTime? endTime,
+  });
+  Future<Reading> setDevice(Device device, DevValue value);
+}
+
 /// Class which communicates with a DrMem node.
 class DrMemService {
   final String _node;
-  final (GraphQLClient, GraphQLClient) _handles;
+  // Real clients are stored here when using the production constructor.
+  GraphQLClient? _qClient;
+  GraphQLClient? _sClient;
+
+  // Delegates used for queries, mutations and subscriptions. Tests can
+  // provide their own implementations via the `DrMemService.test` ctor.
+  late final Future<QueryResult> Function(QueryOptions) _queryFn;
+  late final Future<QueryResult> Function(MutationOptions) _mutateFn;
+  late final Stream<QueryResult> Function(SubscriptionOptions) _subscribeFn;
 
   /// Creates an instance of the class.
-  DrMemService({required NodeInfo info, ClientID? clientId})
-    : _node = info.name,
-      _handles = _createConnection(info, clientId);
+  DrMemService({required NodeInfo info, ClientID? clientId}) : _node = info.name {
+    final handles = _createConnection(info, clientId);
+    _qClient = handles.$1;
+    _sClient = handles.$2;
 
-  GraphQLClient get q => _handles.$1;
-  GraphQLClient get s => _handles.$2;
+    _queryFn = (options) => _qClient!.query(options);
+    _mutateFn = (options) => _qClient!.mutate(options);
+    _subscribeFn = (options) => _sClient!.subscribe(options);
+  }
+
+  /// Test constructor which allows injecting mock implementations for
+  /// query/mutate/subscribe. Use this from unit tests to avoid creating real
+  /// network connections.
+  DrMemService.test({
+    required NodeInfo info,
+    required Future<QueryResult> Function(QueryOptions) queryFn,
+    required Future<QueryResult> Function(MutationOptions) mutateFn,
+    required Stream<QueryResult> Function(SubscriptionOptions) subscribeFn,
+  }) : _node = info.name {
+    _qClient = null;
+    _sClient = null;
+
+    _queryFn = queryFn;
+    _mutateFn = mutateFn;
+    _subscribeFn = subscribeFn;
+  }
 
   /// Clean up resources.
   /// This method should be called by the owner when the service is no longer
   /// needed.
 
   Future<void> dispose() async {
-    await Future.wait([_handles.$1.link.dispose(), _handles.$2.link.dispose()]);
+    final futures = <Future>[];
+    if (_qClient != null) futures.add(_qClient!.link.dispose());
+    if (_sClient != null) futures.add(_sClient!.link.dispose());
+    await Future.wait(futures);
   }
 
   // Helper function to create the GraphQL query URIs.
@@ -204,7 +246,7 @@ mutation SetDevice($name: String!, $value: SettingData!) {
     );
 
     try {
-      final QueryResult result = await q.mutate(options);
+      final QueryResult result = await _mutateFn(options);
 
       if (result.hasException) {
         throw DrMemServerException(
@@ -214,7 +256,8 @@ mutation SetDevice($name: String!, $value: SettingData!) {
       }
 
       // The server nests the mutation result under the `setDevice` field.
-      final Map<String, dynamic>? payload = (result.data?['setDevice'] as Map<String, dynamic>?);
+      final Map<String, dynamic>? payload =
+          (result.data?['setDevice'] as Map<String, dynamic>?);
 
       if (payload == null) {
         throw DrMemServerException(
@@ -224,7 +267,9 @@ mutation SetDevice($name: String!, $value: SettingData!) {
       }
 
       final rawStamp = payload['stamp'];
-      final DateTime stamp = rawStamp is String ? DateTime.parse(rawStamp) : rawStamp as DateTime;
+      final DateTime stamp = rawStamp is String
+          ? DateTime.parse(rawStamp)
+          : rawStamp as DateTime;
 
       return Reading.fromParams(
         stamp,
@@ -270,7 +315,7 @@ query AllDrivers {
     final QueryOptions options = QueryOptions(document: gql(_queryAllDrivers));
 
     try {
-      final QueryResult result = await q.query(options);
+      final QueryResult result = await _queryFn(options);
 
       if (result.hasException) {
         throw DrMemServerException(
@@ -361,7 +406,7 @@ query GetDevice($name: String!) {
     );
 
     try {
-      final QueryResult result = await q.query(options);
+      final QueryResult result = await _queryFn(options);
 
       if (result.hasException) {
         throw DrMemServerException(
@@ -463,7 +508,7 @@ subscription MonitorDevice($device: String!, $range: DateRange) {
           'range': _buildDateRange(startTime, endTime),
         },
       );
-      final Stream<QueryResult> strm = _handles.$2.subscribe(options);
+      final Stream<QueryResult> strm = _subscribeFn(options);
 
       // Handle stream-level errors and GraphQL subscription errors
 
